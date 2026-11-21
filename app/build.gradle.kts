@@ -14,11 +14,15 @@ val localProperties = Properties().apply {
     }
 }
 // CIなどlocal.propertiesがない環境では環境変数を参照（未設定なら空＝AI機能は無効）
-val anthropicApiKey: String = (localProperties.getProperty("ANTHROPIC_API_KEY")
-    ?: System.getenv("ANTHROPIC_API_KEY")
-    ?: "")
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
+fun localOrEnv(name: String): String? =
+    localProperties.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+
+fun String.escapeForBuildConfig(): String = replace("\\", "\\\\").replace("\"", "\\\"")
+
+val geminiApiKey: String = (localOrEnv("GEMINI_API_KEY") ?: "").escapeForBuildConfig()
+// 無料枠で1日に使える回数が多い Flash-Lite を既定にする（local.properties の GEMINI_MODEL で変更可）
+val geminiModel: String = (localOrEnv("GEMINI_MODEL") ?: "gemini-3.5-flash-lite").escapeForBuildConfig()
 
 android {
     namespace = "com.example.pocketenglish"
@@ -31,8 +35,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        buildConfigField("String", "ANTHROPIC_API_KEY", "\"$anthropicApiKey\"")
-        buildConfigField("String", "ANTHROPIC_MODEL", "\"claude-haiku-4-5\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+        buildConfigField("String", "GEMINI_MODEL", "\"$geminiModel\"")
     }
 
     signingConfigs {

@@ -54,7 +54,7 @@ class ChatViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val tts: TtsManager,
     private val speech: SpeechInput,
-    private val client: ClaudeChatClient,
+    private val client: AiChatClient,
 ) : ViewModel() {
 
     private val conversation = MutableStateFlow(
@@ -207,7 +207,7 @@ class ChatViewModel(
                     savedStateHandle = createSavedStateHandle(),
                     tts = (app as PocketEnglishApp).container.ttsManager,
                     speech = SpeechInput(app),
-                    client = ClaudeChatClient(),
+                    client = AiChatClient(),
                 )
             }
         }

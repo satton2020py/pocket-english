@@ -1,3 +1,6 @@
 # このファイルを local.properties にコピーして値を設定してください（local.properties はGit管理外）
 # sdk.dir は Android Studio が自動で書き込みます
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
+# Google AI Studio（https://aistudio.google.com）で作った Gemini APIキー
+GEMINI_API_KEY=AIzaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# 使うモデルを変えたいときだけ指定（省略時は gemini-3.5-flash-lite）
+# GEMINI_MODEL=gemini-3.5-flash-lite

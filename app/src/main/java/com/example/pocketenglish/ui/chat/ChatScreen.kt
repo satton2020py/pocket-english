@@ -153,7 +153,7 @@ private fun SituationPicker(
         )
         if (!hasApiKey) {
             NoticeCard(
-                text = "APIキーが未設定のため、AIの返答は届きません。local.properties に ANTHROPIC_API_KEY を設定してビルドしてください",
+                text = "APIキーが未設定のため、AIの返答は届きません。local.properties に GEMINI_API_KEY を設定してビルドしてください",
             )
         }
         ChatSituation.entries.forEach { situation ->
