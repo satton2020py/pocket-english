@@ -57,5 +57,27 @@ PocketEnglish/
 - 英語音声データが端末にない場合は警告と「設定」ボタンを表示
 - アプリをバックグラウンドにすると読み上げ停止
 
+## AI機能を使うビルド手順（APIキー入り・PCが必要）
+AI会話／瞬間通訳は Claude API を使うため、APIキーを入れて**自分のPCでビルド**します（ActionsのAPKにはキーが入っていません）。
+
+1. **APIキーを作る**：PCのブラウザで https://console.anthropic.com にログイン →「Settings」→「Billing」でクレジットを購入（最低 $5 程度）→「API Keys」→「Create Key」。表示された `sk-ant-` で始まる文字列をコピー（画面を閉じると二度と表示されません）
+2. **Android Studio を入れる**：https://developer.android.com/studio からダウンロードしてインストール。初回起動時のウィザードは「Standard」で進め、SDK のダウンロード完了まで待つ
+3. **コードを取得**：Android Studio の「File → New → Project from Version Control」に `https://github.com/satton2020py/pocket-english.git` を入れて Clone（または GitHub の「Code → Download ZIP」を展開して「File → Open」）
+4. **キーを書く**：プロジェクト直下（`settings.gradle.kts` と同じ場所）の `local.properties` を開く（Android Studio が `sdk.dir=...` 入りで作ってくれます。左のファイル一覧を「Project」表示にすると見えます）。最後の行に次の1行を追加して保存
+   ```
+   ANTHROPIC_API_KEY=sk-ant-ここにコピーしたキー
+   ```
+   `"` で囲まない・前後に空白を入れないこと。このファイルは `.gitignore` 済みなので GitHub には上がりません
+5. **反映**：上部の象アイコン「Sync Project with Gradle Files」を押す
+6. **スマホをつなぐ**：スマホの「設定 → デバイス情報 → ビルド番号」を7回タップして開発者向けオプションを有効化 →「開発者向けオプション → USBデバッグ」をON → USBでPCに接続し、スマホに出る「USBデバッグを許可」で OK
+7. **実行**：Android Studio 上部のデバイス欄にスマホが出たら ▶ Run。ActionsのAPKと同じ署名鍵なので、上書きインストールされお気に入りも残ります
+
+うまくいかないとき
+- AI会話で「APIキーが設定されていない」と出る → `local.properties` の場所・行の書き方を確認して、もう一度 Sync → Run
+- 「APIキーが無効です」と出る → キーのコピー漏れ、またはコンソールでキーが無効化されていないか確認
+- 「混み合っています」「通信できませんでした」が続く → コンソールの Billing でクレジット残高を確認
+
+ビルドしたAPKファイル自体が欲しいときは「Build → Build App Bundle(s) / APK(s) → Build APK(s)」。出来た `app-debug.apk` にはキーが入っているので、**人に渡したり公開したりしないでください**。
+
 ## セキュリティ注意
 BuildConfig に入れたAPIキーはAPKを解析すると取り出せます。個人利用は問題ありませんが、ストア配布する場合は自前のプロキシサーバー経由に切り替えてください。
