@@ -331,7 +331,7 @@ private fun FallbackNotice(error: InterpretError, hasSimilar: Boolean) {
         InterpretError.OFFLINE -> "オフラインのためAI変換できませんでした。"
         InterpretError.TIMEOUT -> "通信がタイムアウトしました。"
         InterpretError.INVALID_KEY -> "APIキーが無効です。local.properties を確認してください。"
-        InterpretError.BUSY -> "AIが混み合っています。少し待ってから再度お試しください。"
+        InterpretError.BUSY -> "無料枠の利用回数の上限に達したか、混み合っています。少し待ってから再度お試しください。"
         InterpretError.SERVER -> "AIサーバーでエラーが発生しました。"
         InterpretError.BAD_RESPONSE -> "AIの返答を読み取れませんでした。もう一度お試しください。"
     }

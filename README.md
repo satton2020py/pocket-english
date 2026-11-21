@@ -4,7 +4,7 @@ Kotlin + Jetpack Compose（Material 3）製。現在は **ステップ1「フレ
 
 ## セットアップ
 1. Android Studio（Ladybug 以降）でこのフォルダを開く
-2. `local.properties.example` を参考に `local.properties` に `ANTHROPIC_API_KEY=...` を追記（フレーズタブだけなら空でも動作）
+2. `local.properties.example` を参考に `local.properties` に `GEMINI_API_KEY=...` を追記（フレーズタブだけなら空でも動作。詳しくは下の「AI機能を使うビルド手順」）
 3. 実機を接続して ▶ Run
 
 ## スマホに直接インストール（PC不要）
@@ -26,7 +26,7 @@ PocketEnglish/
 ├── local.properties.example           … APIキー設定の雛形（local.propertiesはGit管理外）
 ├── .github/workflows/android-debug-apk.yml … debug APK を自動ビルド
 └── app/
-    ├── build.gradle.kts               … BuildConfig に ANTHROPIC_API_KEY を注入
+    ├── build.gradle.kts               … BuildConfig に GEMINI_API_KEY / GEMINI_MODEL を注入
     ├── debug.keystore                 … debug専用の固定署名鍵（上書きインストール用）
     └── src/main/
         ├── AndroidManifest.xml
@@ -39,7 +39,7 @@ PocketEnglish/
             ├── data/
             │   ├── PhraseData.kt      … 内蔵フレーズ 6カテゴリ×15
             │   ├── UserPreferencesRepository.kt … お気に入り・ゆっくり再生（DataStore）
-            │   └── remote/            … ApiConfig / HttpClientProvider（OkHttp、2・3タブ用の下地）
+            │   └── remote/            … ApiConfig / HttpClientProvider / GeminiClient（OkHttp で Gemini API を呼ぶ）
             ├── tts/TtsManager.kt      … TextToSpeech ラッパー（StateFlow公開）
             └── ui/
                 ├── MainScreen.kt      … BottomNavigation 3タブ
@@ -47,7 +47,7 @@ PocketEnglish/
                 ├── common/            … カテゴリアイコン・準備中画面
                 └── theme/             … 高コントラスト配色（ライト/ダーク）
 ```
-今後追加予定: `speech/`（SpeechRecognizer）、`data/remote/ClaudeClient.kt`、`ui/chat/`、`ui/interpreter/`
+AI通信は `data/remote/GeminiClient.kt`（Gemini generateContent を OkHttp で呼ぶ共通クライアント）。各タブの画面・音声入力は `ui/chat/`（AI会話）と `ui/interpreter/`（瞬間通訳）
 
 ## 主な仕様（フレーズタブ）
 - カテゴリ切替チップ・ゆっくり再生トグルは画面下部（親指で届く位置）
@@ -56,6 +56,31 @@ PocketEnglish/
 - 「お気に入り」チップでお気に入りだけを一覧表示
 - 英語音声データが端末にない場合は警告と「設定」ボタンを表示
 - アプリをバックグラウンドにすると読み上げ停止
+
+## AI機能を使うビルド手順（APIキー入り・PCが必要）
+AI会話／瞬間通訳は **Gemini API**（無料枠あり・クレジットカード登録不要）を使います。APIキーを入れて**自分のPCでビルド**します（ActionsのAPKにはキーが入っていません）。
+
+1. **APIキーを作る**：PCのブラウザで https://aistudio.google.com に Google アカウントでログイン →「Get API key」→「Create API key」。表示された `AIza` で始まる文字列をコピー（支払い設定はしなくてOK＝無料枠のまま）
+2. **Android Studio を入れる**：https://developer.android.com/studio からダウンロードしてインストール。初回起動時のウィザードは「Standard」で進め、SDK のダウンロード完了まで待つ
+3. **コードを取得**：Android Studio の「File → New → Project from Version Control」に `https://github.com/satton2020py/pocket-english.git` を入れて Clone（または GitHub の「Code → Download ZIP」を展開して「File → Open」）
+4. **キーを書く**：プロジェクト直下（`settings.gradle.kts` と同じ場所）の `local.properties` を開く（Android Studio が `sdk.dir=...` 入りで作ってくれます。左のファイル一覧を「Project」表示にすると見えます）。最後の行に次の1行を追加して保存
+   ```
+   GEMINI_API_KEY=AIzaここにコピーしたキー
+   ```
+   `"` で囲まない・前後に空白を入れないこと。このファイルは `.gitignore` 済みなので GitHub には上がりません
+5. **反映**：上部の象アイコン「Sync Project with Gradle Files」を押す
+6. **スマホをつなぐ**：スマホの「設定 → デバイス情報 → ビルド番号」を7回タップして開発者向けオプションを有効化 →「開発者向けオプション → USBデバッグ」をON → USBでPCに接続し、スマホに出る「USBデバッグを許可」で OK
+7. **実行**：Android Studio 上部のデバイス欄にスマホが出たら ▶ Run。ActionsのAPKと同じ署名鍵なので、上書きインストールされお気に入りも残ります
+
+うまくいかないとき
+- AI会話で「APIキーが設定されていない」と出る → `local.properties` の場所・行の書き方を確認して、もう一度 Sync → Run
+- 「APIキーが無効です」と出る → キーのコピー漏れ、または AI Studio でキーが削除されていないか確認
+- 「利用回数の上限に達したか、混み合っています」と出る → 無料枠は1分あたり・1日あたりの回数に上限があります。1分ほど待つか、1日の上限なら太平洋時間の0時（日本時間の16〜17時ごろ）のリセット後に再度お試しください
+- 使うモデルを変えたいとき → `local.properties` に `GEMINI_MODEL=モデル名` を追加（省略時は `gemini-3.5-flash-lite`。無料枠の回数が多い Flash-Lite を既定にしています）
+
+無料枠では、送った内容が Google のサービス改善に使われることがあります。個人情報やパスワードは話さないでください。
+
+ビルドしたAPKファイル自体が欲しいときは「Build → Build App Bundle(s) / APK(s) → Build APK(s)」。出来た `app-debug.apk` にはキーが入っているので、**人に渡したり公開したりしないでください**。
 
 ## セキュリティ注意
 BuildConfig に入れたAPIキーはAPKを解析すると取り出せます。個人利用は問題ありませんが、ストア配布する場合は自前のプロキシサーバー経由に切り替えてください。

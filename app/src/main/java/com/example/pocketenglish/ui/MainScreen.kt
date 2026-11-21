@@ -25,7 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.example.pocketenglish.ui.common.ComingSoonScreen
+import com.example.pocketenglish.ui.chat.ChatScreen
 import com.example.pocketenglish.ui.interpreter.InterpreterScreen
 import com.example.pocketenglish.ui.phrase.PhraseScreen
 import kotlinx.coroutines.launch
@@ -75,12 +75,7 @@ fun MainScreen() {
             .consumeWindowInsets(innerPadding)
         when (currentTab) {
             AppTab.PHRASE -> PhraseScreen(showMessage = showMessage, modifier = contentModifier)
-            AppTab.AI_CHAT -> ComingSoonScreen(
-                title = "AI会話",
-                description = "カフェ注文・入国審査・道案内・フリートークの\n音声ロールプレイは次のステップで追加します",
-                icon = AppTab.AI_CHAT.icon,
-                modifier = contentModifier,
-            )
+            AppTab.AI_CHAT -> ChatScreen(showMessage = showMessage, modifier = contentModifier)
             AppTab.INTERPRETER -> InterpreterScreen(showMessage = showMessage, modifier = contentModifier)
         }
     }
