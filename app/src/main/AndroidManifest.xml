@@ -3,11 +3,15 @@
 
     <!-- 2・3タブ目（AI会話 / 瞬間通訳）で使用。フレーズタブはオフラインで動作する -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <queries>
         <!-- Android 11+ で端末のTTSエンジンを検出するために必要 -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
