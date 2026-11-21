@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.pocketenglish.ui.chat.ChatScreen
 import com.example.pocketenglish.ui.interpreter.InterpreterScreen
+import com.example.pocketenglish.ui.listening.ListeningScreen
 import com.example.pocketenglish.ui.phrase.PhraseScreen
 import kotlinx.coroutines.launch
 
@@ -34,6 +36,7 @@ enum class AppTab(val label: String, val icon: ImageVector) {
     PHRASE("フレーズ", Icons.Filled.Bookmarks),
     AI_CHAT("AI会話", Icons.Filled.SmartToy),
     INTERPRETER("瞬間通訳", Icons.Filled.Translate),
+    LISTENING("聞き取り", Icons.Filled.Hearing),
 }
 
 @Composable
@@ -77,6 +80,7 @@ fun MainScreen() {
             AppTab.PHRASE -> PhraseScreen(showMessage = showMessage, modifier = contentModifier)
             AppTab.AI_CHAT -> ChatScreen(showMessage = showMessage, modifier = contentModifier)
             AppTab.INTERPRETER -> InterpreterScreen(showMessage = showMessage, modifier = contentModifier)
+            AppTab.LISTENING -> ListeningScreen(showMessage = showMessage, modifier = contentModifier)
         }
     }
 }
