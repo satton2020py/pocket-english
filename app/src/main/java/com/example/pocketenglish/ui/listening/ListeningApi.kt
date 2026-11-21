@@ -11,7 +11,15 @@ import com.example.pocketenglish.model.Phrase
 data class HeardTranslation(val english: String, val japanese: String)
 
 /** 翻訳に失敗した理由（UIの案内文を出し分けるため）。 */
-enum class TranslateError { NO_API_KEY, OFFLINE, TIMEOUT, INVALID_KEY, BUSY, SERVER, BAD_RESPONSE }
+enum class TranslateError {
+    NO_API_KEY, OFFLINE, TIMEOUT, INVALID_KEY, BUSY, SERVER, BAD_RESPONSE,
+
+    /** カメラ翻訳で、写真から英語を読み取れなかった。 */
+    NO_TEXT,
+
+    /** カメラ翻訳で、撮った写真を読み込めなかった。 */
+    PHOTO_UNREADABLE,
+}
 
 sealed interface TranslateResult {
     data class Success(val translation: HeardTranslation) : TranslateResult
@@ -44,6 +52,29 @@ class ListeningApi(
         }
     }
 
+    /** 写真（看板・メニューなど）の英語を読み取り、日本語に訳す。 */
+    suspend fun translatePhoto(jpeg: ByteArray): TranslateResult {
+        val result = gemini.generateJson(
+            systemInstruction = PHOTO_SYSTEM_PROMPT,
+            turns = listOf(GeminiTurn(fromUser = true, text = "Read the English in this photo and translate it.")),
+            schema = RESPONSE_SCHEMA,
+            maxOutputTokens = 2048,
+            jpegImage = jpeg,
+        )
+        return when (result) {
+            is GeminiResult.Failure -> TranslateResult.Failure(result.error.toTranslateError())
+            is GeminiResult.Success -> {
+                val english = result.json.optString("english").trim()
+                val japanese = result.json.optString("japanese").trim()
+                when {
+                    english.isEmpty() -> TranslateResult.Failure(TranslateError.NO_TEXT)
+                    japanese.isEmpty() -> TranslateResult.Failure(TranslateError.BAD_RESPONSE)
+                    else -> TranslateResult.Success(HeardTranslation(english, japanese))
+                }
+            }
+        }
+    }
+
     private fun GeminiError.toTranslateError(): TranslateError = when (this) {
         GeminiError.NO_API_KEY -> TranslateError.NO_API_KEY
         GeminiError.OFFLINE -> TranslateError.OFFLINE
@@ -66,6 +97,19 @@ class ListeningApi(
               Correct only obvious recognition mistakes; do not paraphrase.
             - "japanese": a natural, easy-to-understand Japanese translation of it.
               Keep the meaning faithful. If it is a question, make it clearly a question.
+            Return a JSON object with the keys "english" and "japanese".
+        """.trimIndent()
+
+        val PHOTO_SYSTEM_PROMPT = """
+            You help a Japanese traveler understand English text they see abroad.
+            The user sends a photo of a sign, a menu, a notice, a ticket or a screen.
+            - "english": the English text in the photo, transcribed faithfully (main text first,
+              skip tiny fine print). Keep line breaks for lists such as menus. If the text is in
+              another foreign language, transcribe it as it is.
+            - "japanese": a natural, easy-to-understand Japanese translation of it. For a menu,
+              translate each item on its own line, and add a short note in parentheses when an
+              item is hard to imagine (for example, the main ingredient).
+            If there is no readable text, return empty strings for both keys.
             Return a JSON object with the keys "english" and "japanese".
         """.trimIndent()
     }

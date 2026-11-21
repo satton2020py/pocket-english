@@ -1,5 +1,6 @@
 package com.example.pocketenglish.data.remote
 
+import android.util.Base64
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -55,15 +56,29 @@ class GeminiClient(
         turns: List<GeminiTurn>,
         schema: JSONObject,
         maxOutputTokens: Int,
+        jpegImage: ByteArray? = null,
     ): GeminiResult {
         if (!ApiConfig.hasApiKey) return GeminiResult.Failure(GeminiError.NO_API_KEY)
 
         val contents = JSONArray()
-        turns.forEach { turn ->
+        turns.forEachIndexed { index, turn ->
+            val parts = JSONArray()
+            // 画像（カメラ翻訳）は最後のユーザー発言に添付する。Gemini は画像を先に置くと精度が上がる
+            if (jpegImage != null && turn.fromUser && index == turns.lastIndex) {
+                parts.put(
+                    JSONObject().put(
+                        "inlineData",
+                        JSONObject()
+                            .put("mimeType", "image/jpeg")
+                            .put("data", Base64.encodeToString(jpegImage, Base64.NO_WRAP)),
+                    ),
+                )
+            }
+            parts.put(JSONObject().put("text", turn.text))
             contents.put(
                 JSONObject()
                     .put("role", if (turn.fromUser) "user" else "model")
-                    .put("parts", JSONArray().put(JSONObject().put("text", turn.text))),
+                    .put("parts", parts),
             )
         }
         val body = JSONObject()

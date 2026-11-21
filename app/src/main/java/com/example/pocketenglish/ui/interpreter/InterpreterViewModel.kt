@@ -13,6 +13,7 @@ import com.example.pocketenglish.data.remote.ApiConfig
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.tts.TtsManager
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.PhotoEncoder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** 3パターンの種類。表示順はこの定義順。 */
 enum class EnglishStyle(val labelJa: String, val hint: String) {
@@ -35,11 +37,15 @@ enum class EnglishStyle(val labelJa: String, val hint: String) {
 sealed interface ResultState {
     data object Empty : ResultState
     data class Loading(val japanese: String) : ResultState
+
+    /** カメラ翻訳で、写真を読み取り中。 */
+    data object ReadingPhoto : ResultState
     data class Success(val translations: Translations) : ResultState
 
     /** AIで変換できなかった。内蔵フレーズから近いものを代わりに出す。 */
     data class Fallback(
-        val japanese: String,
+        /** カメラ翻訳で読み取れなかったときは null。 */
+        val japanese: String?,
         val error: InterpretError,
         val similar: List<Phrase>,
     ) : ResultState
@@ -119,6 +125,30 @@ class InterpreterViewModel(
                     error = r.error,
                     similar = LocalPhraseMatcher.findSimilar(japanese),
                 )
+            }
+        }
+    }
+
+    /** カメラ翻訳: 撮った写真の文字を読み取って英語にする。 */
+    fun interpretPhoto(photo: File) {
+        interpretJob?.cancel()
+        tts.stop()
+        result.value = ResultState.ReadingPhoto
+        interpretJob = viewModelScope.launch {
+            val jpeg = PhotoEncoder.encodeForUpload(photo)
+            val r = if (jpeg == null) {
+                InterpretResult.Failure(InterpretError.PHOTO_UNREADABLE)
+            } else {
+                api.interpretPhoto(jpeg)
+            }
+            result.value = when (r) {
+                is InterpretResult.Success -> {
+                    // 読み取った文を入力欄にも入れ、直して再変換できるようにする
+                    input.value = r.translations.japanese
+                    ResultState.Success(r.translations)
+                }
+                // 写真の場合は比べる文字がないので、内蔵フレーズの候補は出さない
+                is InterpretResult.Failure -> ResultState.Fallback(japanese = null, error = r.error, similar = emptyList())
             }
         }
     }

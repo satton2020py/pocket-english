@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.CloudOff
@@ -39,6 +40,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,6 +68,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.CAMERA_PRIVACY_NOTE
+import com.example.pocketenglish.ui.common.rememberCameraCapture
 
 private const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
@@ -97,6 +101,8 @@ fun InterpreterScreen(
             showMessage("マイクが許可されていないため音声入力は使えません。文字で入力してください")
         }
     }
+
+    val camera = rememberCameraCapture { photo -> viewModel.interpretPhoto(photo) }
 
     LaunchedEffect(viewModel) {
         viewModel.speechErrors.collect { error ->
@@ -143,6 +149,15 @@ fun InterpreterScreen(
             }
         },
         onCancelListening = viewModel::cancelListening,
+        onCameraTap = {
+            when {
+                !state.hasApiKey -> showMessage("カメラ翻訳にはAIのAPIキーが必要です。文字か音声で入力してください")
+                else -> {
+                    keyboard?.hide()
+                    if (!camera.launch()) showMessage("カメラアプリが見つかりません。文字か音声で入力してください")
+                }
+            }
+        },
         onSpeak = { english, id ->
             if (!viewModel.speak(english, id)) showMessage(TTS_ERROR_MESSAGE)
         },
@@ -160,6 +175,7 @@ private fun InterpreterContent(
     onExample: (String) -> Unit,
     onMicTap: () -> Unit,
     onCancelListening: () -> Unit,
+    onCameraTap: () -> Unit,
     onSpeak: (english: String, utteranceId: String) -> Unit,
     onSlowSpeechChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -195,6 +211,7 @@ private fun InterpreterContent(
             onClear = onClear,
             onMicTap = onMicTap,
             onCancelListening = onCancelListening,
+            onCameraTap = onCameraTap,
             onSlowSpeechChange = onSlowSpeechChange,
         )
     }
@@ -238,6 +255,22 @@ private fun ResultArea(
             Text("「${result.japanese}」を英語に変換中…", style = MaterialTheme.typography.bodyLarge)
         }
 
+        ResultState.ReadingPhoto -> Column(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(16.dp))
+            Text("写真の文字を読み取って英語に変換中…", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "写真を Google の Gemini API に送信しています",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         is ResultState.Success -> LazyColumn(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -263,8 +296,14 @@ private fun ResultArea(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item { SourceLabel(result.japanese) }
-            item { FallbackNotice(result.error, hasSimilar = result.similar.isNotEmpty()) }
+            result.japanese?.let { japanese -> item { SourceLabel(japanese) } }
+            item {
+                FallbackNotice(
+                    error = result.error,
+                    hasSimilar = result.similar.isNotEmpty(),
+                    fromPhoto = result.japanese == null,
+                )
+            }
             items(items = result.similar, key = { it.id }) { phrase: Phrase ->
                 val id = InterpreterViewModel.utteranceId(phrase)
                 SpeakableCard(
@@ -296,6 +335,12 @@ private fun Examples(onExample: (String) -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         Text("下のマイクを押して日本語で話してください", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "📷 で日本語のメモや看板を撮っても英語にできます",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(16.dp))
         Text(
             "例文をタップして試す",
@@ -311,6 +356,12 @@ private fun Examples(onExample: (String) -> Unit) {
                 AssistChip(onClick = { onExample(example) }, label = { Text(example) })
             }
         }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            CAMERA_PRIVACY_NOTE,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -325,7 +376,7 @@ private fun SourceLabel(japanese: String) {
 }
 
 @Composable
-private fun FallbackNotice(error: InterpretError, hasSimilar: Boolean) {
+private fun FallbackNotice(error: InterpretError, hasSimilar: Boolean, fromPhoto: Boolean) {
     val reason = when (error) {
         InterpretError.NO_API_KEY -> "APIキー未設定のためAI変換は使えません。"
         InterpretError.OFFLINE -> "オフラインのためAI変換できませんでした。"
@@ -334,8 +385,14 @@ private fun FallbackNotice(error: InterpretError, hasSimilar: Boolean) {
         InterpretError.BUSY -> "無料枠の利用回数の上限に達したか、混み合っています。少し待ってから再度お試しください。"
         InterpretError.SERVER -> "AIサーバーでエラーが発生しました。"
         InterpretError.BAD_RESPONSE -> "AIの返答を読み取れませんでした。もう一度お試しください。"
+        InterpretError.NO_TEXT -> "写真から文字を読み取れませんでした。"
+        InterpretError.PHOTO_UNREADABLE -> "撮った写真を読み込めませんでした。"
     }
-    val tail = if (hasSimilar) "内蔵フレーズから近いものを表示します" else "内蔵フレーズにも近いものが見つかりませんでした"
+    val tail = when {
+        fromPhoto -> "文字が大きくはっきり写るように撮り直すか、文字で入力してください"
+        hasSimilar -> "内蔵フレーズから近いものを表示します"
+        else -> "内蔵フレーズにも近いものが見つかりませんでした"
+    }
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(12.dp),
@@ -428,10 +485,11 @@ private fun InputPanel(
     onClear: () -> Unit,
     onMicTap: () -> Unit,
     onCancelListening: () -> Unit,
+    onCameraTap: () -> Unit,
     onSlowSpeechChange: (Boolean) -> Unit,
 ) {
     val listening = state.speech as? SpeechState.Listening
-    val isLoading = state.result is ResultState.Loading
+    val isLoading = state.result is ResultState.Loading || state.result is ResultState.ReadingPhoto
 
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
         Column(
@@ -498,6 +556,15 @@ private fun InputPanel(
                 if (listening != null) {
                     IconButton(onClick = onCancelListening) {
                         Icon(Icons.Filled.Close, contentDescription = "音声入力をやめる")
+                    }
+                } else {
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = onCameraTap,
+                        enabled = !isLoading,
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        Icon(Icons.Filled.PhotoCamera, contentDescription = "写真の日本語を英語にする")
                     }
                 }
             }
