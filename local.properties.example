@@ -1,0 +1,3 @@
+# このファイルを local.properties にコピーして値を設定してください（local.properties はGit管理外）
+# sdk.dir は Android Studio が自動で書き込みます
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
