@@ -37,7 +37,7 @@ PocketEnglish/
             ├── MainActivity.kt
             ├── model/Phrase.kt        … Phrase / PhraseCategory
             ├── data/
-            │   ├── PhraseData.kt      … 内蔵フレーズ 6カテゴリ×5
+            │   ├── PhraseData.kt      … 内蔵フレーズ 6カテゴリ×15
             │   ├── UserPreferencesRepository.kt … お気に入り・ゆっくり再生（DataStore）
             │   └── remote/            … ApiConfig / HttpClientProvider（OkHttp、2・3タブ用の下地）
             ├── tts/TtsManager.kt      … TextToSpeech ラッパー（StateFlow公開）
