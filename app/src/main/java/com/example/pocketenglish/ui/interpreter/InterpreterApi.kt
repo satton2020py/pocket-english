@@ -22,6 +22,12 @@ enum class InterpretError {
     BUSY,
     SERVER,
     BAD_RESPONSE,
+
+    /** カメラ翻訳で、写真から文字を読み取れなかった。 */
+    NO_TEXT,
+
+    /** カメラ翻訳で、撮った写真を読み込めなかった。 */
+    PHOTO_UNREADABLE,
 }
 
 sealed interface InterpretResult {
@@ -58,6 +64,32 @@ class InterpreterApi(
         }
     }
 
+    /** 写真（日本語のメモ・看板など）の文字を読み取り、3パターンの英語にする。 */
+    suspend fun interpretPhoto(jpeg: ByteArray): InterpretResult {
+        val result = gemini.generateJson(
+            systemInstruction = PHOTO_SYSTEM_PROMPT,
+            turns = listOf(GeminiTurn(fromUser = true, text = "Read the text in this photo and translate it.")),
+            schema = PHOTO_RESPONSE_SCHEMA,
+            maxOutputTokens = 2048,
+            jpegImage = jpeg,
+        )
+        return when (result) {
+            is GeminiResult.Failure -> InterpretResult.Failure(result.error.toInterpretError())
+            is GeminiResult.Success -> {
+                val japanese = result.json.optString("japanese").trim()
+                val polite = result.json.optString("polite").trim()
+                val casual = result.json.optString("casual").trim()
+                val short = result.json.optString("short").trim()
+                when {
+                    japanese.isEmpty() -> InterpretResult.Failure(InterpretError.NO_TEXT)
+                    polite.isEmpty() || casual.isEmpty() || short.isEmpty() ->
+                        InterpretResult.Failure(InterpretError.BAD_RESPONSE)
+                    else -> InterpretResult.Success(Translations(japanese, polite, casual, short))
+                }
+            }
+        }
+    }
+
     private fun GeminiError.toInterpretError(): InterpretError = when (this) {
         GeminiError.NO_API_KEY -> InterpretError.NO_API_KEY
         GeminiError.OFFLINE -> InterpretError.OFFLINE
@@ -80,6 +112,22 @@ class InterpreterApi(
             Keep the meaning faithful; fill in obvious omitted subjects naturally.
             If the input is not Japanese, still return the best English in the three styles.
             Return a JSON object with the keys "polite", "casual" and "short".
+        """.trimIndent()
+
+        val PHOTO_RESPONSE_SCHEMA = GeminiClient.stringObjectSchema("japanese", "polite", "casual", "short")
+
+        val PHOTO_SYSTEM_PROMPT = """
+            You are a pocket interpreter for a Japanese traveler abroad.
+            The user sends a photo of text, such as a handwritten note, a sign, a menu or a screen.
+            - "japanese": the main text in the photo, transcribed faithfully. If the text is not
+              in Japanese, give a natural Japanese translation of it instead. Keep line breaks
+              for lists such as menus. If there is no readable text, return an empty string
+              for every key.
+            - "polite", "casual", "short": natural spoken English for that text, in three styles:
+              courteous for staff or strangers, friendly everyday English, and the shortest
+              phrase that still gets the meaning across.
+              For a list (such as a menu), translate every item, one per line.
+            Return a JSON object with the keys "japanese", "polite", "casual" and "short".
         """.trimIndent()
     }
 }

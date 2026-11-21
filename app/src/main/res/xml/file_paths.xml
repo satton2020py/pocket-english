@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- カメラ翻訳の撮影先（キャッシュ内の1枚だけ。標準カメラアプリに書き込んでもらう） -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

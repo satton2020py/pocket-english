@@ -13,6 +13,7 @@ import com.example.pocketenglish.data.remote.ApiConfig
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.tts.TtsManager
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.PhotoEncoder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** 聞き取った1発言の翻訳状態。 */
 sealed interface TranslationState {
@@ -39,6 +41,8 @@ data class HeardEntry(
     val id: Long,
     val english: String,
     val translation: TranslationState,
+    /** カメラ翻訳の結果。読み取り前・失敗時は [english] が空。 */
+    val fromPhoto: Boolean = false,
 )
 
 data class ListeningUiState(
@@ -61,6 +65,9 @@ class ListeningViewModel(
     private val entries = MutableStateFlow<List<HeardEntry>>(emptyList())
     private val input = MutableStateFlow("")
     private val jobs = mutableMapOf<Long, Job>()
+
+    /** 読み取りに失敗した写真（再翻訳用）。成功したら捨てる。 */
+    private val photos = mutableMapOf<Long, ByteArray>()
     private var nextId = 0L
 
     private val _hearingErrors = Channel<HearingError>(Channel.CONFLATED)
@@ -110,12 +117,62 @@ class ListeningViewModel(
         val id = nextId++
         // 新しいものを一番上に
         entries.update { listOf(HeardEntry(id, english, TranslationState.Translating)) + it.take(MAX_ENTRIES - 1) }
+        forgetDroppedPhotos()
         translate(id, english)
     }
+
+    /** カメラ翻訳: 撮った写真の英語を読み取って訳す。 */
+    fun addPhoto(photo: File) {
+        val id = nextId++
+        tts.stop()
+        entries.update {
+            listOf(HeardEntry(id, english = "", translation = TranslationState.Translating, fromPhoto = true)) +
+                it.take(MAX_ENTRIES - 1)
+        }
+        forgetDroppedPhotos()
+        jobs[id] = viewModelScope.launch {
+            val jpeg = PhotoEncoder.encodeForUpload(photo)
+            if (jpeg == null) {
+                updateEntry(id) { it.copy(translation = failed(TranslateError.PHOTO_UNREADABLE)) }
+            } else {
+                photos[id] = jpeg
+                translatePhoto(id, jpeg)
+            }
+            jobs.remove(id)
+        }
+    }
+
+    private suspend fun translatePhoto(id: Long, jpeg: ByteArray) {
+        when (val r = api.translatePhoto(jpeg)) {
+            is TranslateResult.Success -> {
+                photos.remove(id)
+                updateEntry(id) {
+                    it.copy(
+                        english = r.translation.english,
+                        translation = TranslationState.Done(r.translation.japanese),
+                    )
+                }
+            }
+            // 写真の場合は比べる英文がないので、内蔵フレーズの候補は出さない
+            is TranslateResult.Failure -> updateEntry(id) { it.copy(translation = failed(r.error)) }
+        }
+    }
+
+    private fun failed(error: TranslateError) = TranslationState.Failed(error = error, similar = emptyList())
 
     /** 失敗した翻訳をやり直す。 */
     fun retry(id: Long) {
         val entry = entries.value.firstOrNull { it.id == id } ?: return
+        if (entry.fromPhoto && entry.english.isEmpty()) {
+            val jpeg = photos[id] ?: return
+            updateEntry(id) { it.copy(translation = TranslationState.Translating) }
+            jobs[id]?.cancel()
+            jobs[id] = viewModelScope.launch {
+                translatePhoto(id, jpeg)
+                jobs.remove(id)
+            }
+            return
+        }
         updateEntry(id) { it.copy(translation = TranslationState.Translating) }
         translate(id, entry.english)
     }
@@ -143,6 +200,12 @@ class ListeningViewModel(
         }
     }
 
+    /** 履歴からあふれた写真をメモリから消す。 */
+    private fun forgetDroppedPhotos() {
+        val kept = entries.value.mapTo(mutableSetOf()) { it.id }
+        photos.keys.retainAll(kept)
+    }
+
     private fun updateEntry(id: Long, transform: (HeardEntry) -> HeardEntry) {
         entries.update { list -> list.map { if (it.id == id) transform(it) else it } }
     }
@@ -152,6 +215,7 @@ class ListeningViewModel(
         jobs.clear()
         tts.stop()
         entries.value = emptyList()
+        photos.clear()
     }
 
     fun startListening() {
