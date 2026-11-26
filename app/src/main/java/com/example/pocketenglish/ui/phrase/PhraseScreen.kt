@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,13 +33,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -53,10 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,16 +62,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.pocketenglish.data.PhraseData
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.model.PhraseCategory
 import com.example.pocketenglish.tts.TtsStatus
@@ -88,19 +76,17 @@ import com.example.pocketenglish.ui.common.icon
 import com.example.pocketenglish.ui.theme.english
 import com.example.pocketenglish.ui.theme.favoriteStarColor
 
-private const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
+internal const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
 @Composable
 fun PhraseScreen(
     showMessage: (String) -> Unit,
+    onShowPhrase: (phraseId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PhraseViewModel = viewModel(factory = PhraseViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // 「見せる」全画面表示中のフレーズ（画面回転でも閉じないよう ID で保持）
-    var showingId by rememberSaveable { mutableStateOf<String?>(null) }
-
     PhraseContent(
         state = state,
         onSelectFilter = viewModel::selectFilter,
@@ -109,7 +95,7 @@ fun PhraseScreen(
             val accepted = viewModel.onPhraseTapped(phrase)
             if (!accepted) showMessage(TTS_ERROR_MESSAGE)
         },
-        onShow = { phrase -> showingId = phrase.id },
+        onShow = { phrase -> onShowPhrase(phrase.id) },
         onToggleFavorite = { item ->
             viewModel.toggleFavorite(item.phrase)
             showMessage(if (item.isFavorite) "お気に入りから外しました" else "★ お気に入りに追加しました")
@@ -120,18 +106,6 @@ fun PhraseScreen(
         },
         modifier = modifier,
     )
-
-    val showing = showingId?.let { id -> PhraseData.all.firstOrNull { it.id == id } }
-    if (showing != null) {
-        ShowToStaffDialog(
-            phrase = showing,
-            isSpeaking = state.items.any { it.phrase.id == showing.id && it.isSpeaking },
-            onSpeak = { slow ->
-                if (!viewModel.speak(showing, slow)) showMessage(TTS_ERROR_MESSAGE)
-            },
-            onDismiss = { showingId = null },
-        )
-    }
 }
 
 @Composable
@@ -457,85 +431,6 @@ private fun PhraseCard(
                         tint = if (item.isFavorite) favoriteStarColor else colors.outline,
                         modifier = Modifier.size(26.dp),
                     )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 店員さんなどに画面を向けて見せるための全画面表示。
- * 声に出しにくい場面でも、大きな英文を見せれば伝わる（Google翻訳の全画面表示と同じ考え方）。
- * 屋外でも読めるよう、テーマに関係なく白地に濃い文字で表示する。
- */
-@Composable
-private fun ShowToStaffDialog(
-    phrase: Phrase,
-    isSpeaking: Boolean,
-    onSpeak: (slow: Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        // 画面いっぱいに描き、ステータスバー・ナビゲーションバー（戻る/ホームのボタン）の分だけ内側に余白をとる。
-        // decorFitsSystemWindows = true のままだと端末によってはボタンの下に潜り込んで押せなくなる
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White)
-                .safeDrawingPadding()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "相手に見せる",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFF4D5A72),
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "閉じる", tint = Color(0xFF0F1A2C))
-                }
-            }
-            Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Text(
-                    text = phrase.english,
-                    style = MaterialTheme.typography.headlineSmall.english(),
-                    fontSize = 44.sp,
-                    lineHeight = 52.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF0F1A2C),
-                )
-            }
-            Text(
-                text = phrase.japanese,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF4D5A72),
-            )
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilledTonalButton(
-                    onClick = { onSpeak(true) },
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(Icons.Filled.Speed, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("ゆっくり")
-                }
-                Button(
-                    onClick = { onSpeak(false) },
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(
-                        if (isSpeaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = null,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isSpeaking) "止める" else "再生")
                 }
             }
         }

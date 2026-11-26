@@ -1,6 +1,8 @@
 package com.example.pocketenglish.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
@@ -34,6 +36,7 @@ import com.example.pocketenglish.ui.chat.ChatScreen
 import com.example.pocketenglish.ui.interpreter.InterpreterScreen
 import com.example.pocketenglish.ui.listening.ListeningScreen
 import com.example.pocketenglish.ui.phrase.PhraseScreen
+import com.example.pocketenglish.ui.phrase.ShowToStaffOverlay
 import kotlinx.coroutines.launch
 
 /** 選択中のタブは塗りつぶし、それ以外は線だけのアイコンにする（Android・iPhone共通の見せ方）。 */
@@ -47,6 +50,8 @@ enum class AppTab(val label: String, val selectedIcon: ImageVector, val icon: Im
 @Composable
 fun MainScreen() {
     var currentTab by rememberSaveable { mutableStateOf(AppTab.PHRASE) }
+    // フレーズを「相手に見せる」全画面表示中ならその ID
+    var showingPhraseId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -58,35 +63,48 @@ fun MainScreen() {
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                AppTab.entries.forEach { tab ->
-                    val selected = currentTab == tab
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { currentTab = tab },
-                        icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    AppTab.entries.forEach { tab ->
+                        val selected = currentTab == tab
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { currentTab = tab },
+                            icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
+                            label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    }
                 }
+            },
+        ) { innerPadding ->
+            val contentModifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+            when (currentTab) {
+                AppTab.PHRASE -> PhraseScreen(
+                    showMessage = showMessage,
+                    onShowPhrase = { showingPhraseId = it },
+                    modifier = contentModifier,
+                )
+                AppTab.AI_CHAT -> ChatScreen(showMessage = showMessage, modifier = contentModifier)
+                AppTab.INTERPRETER -> InterpreterScreen(showMessage = showMessage, modifier = contentModifier)
+                AppTab.LISTENING -> ListeningScreen(showMessage = showMessage, modifier = contentModifier)
             }
-        },
-    ) { innerPadding ->
-        val contentModifier = Modifier
-            .padding(innerPadding)
-            .consumeWindowInsets(innerPadding)
-        when (currentTab) {
-            AppTab.PHRASE -> PhraseScreen(showMessage = showMessage, modifier = contentModifier)
-            AppTab.AI_CHAT -> ChatScreen(showMessage = showMessage, modifier = contentModifier)
-            AppTab.INTERPRETER -> InterpreterScreen(showMessage = showMessage, modifier = contentModifier)
-            AppTab.LISTENING -> ListeningScreen(showMessage = showMessage, modifier = contentModifier)
+        }
+        showingPhraseId?.let { id ->
+            ShowToStaffOverlay(
+                phraseId = id,
+                showMessage = showMessage,
+                onDismiss = { showingPhraseId = null },
+            )
         }
     }
 }
