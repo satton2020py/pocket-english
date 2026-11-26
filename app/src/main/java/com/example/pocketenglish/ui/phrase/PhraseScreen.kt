@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -477,14 +477,16 @@ private fun ShowToStaffDialog(
 ) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // 画面いっぱいに描き、ステータスバー・ナビゲーションバー（戻る/ホームのボタン）の分だけ内側に余白をとる。
+        // decorFitsSystemWindows = true のままだと端末によってはボタンの下に潜り込んで押せなくなる
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .systemBarsPadding()
-                .padding(24.dp),
+                .safeDrawingPadding()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
