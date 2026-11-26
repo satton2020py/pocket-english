@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Speed
@@ -52,6 +53,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +73,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.tts.TtsStatus
 import com.example.pocketenglish.ui.common.CAMERA_PRIVACY_NOTE
+import com.example.pocketenglish.ui.common.DockAction
+import com.example.pocketenglish.ui.common.SlowSpeechChip
+import com.example.pocketenglish.ui.common.VoiceDock
 import com.example.pocketenglish.ui.common.rememberCameraCapture
 import com.example.pocketenglish.ui.theme.english
 
@@ -182,13 +189,19 @@ private fun InterpreterContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp)) {
-            Text(text = "瞬間通訳", style = MaterialTheme.typography.headlineSmall)
-            Text(
-                text = "日本語を話すか入力 → 3パターンの英語に。タップで読み上げ",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "瞬間通訳", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = "日本語を話すと3パターンの英語に。タップで読み上げ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            SlowSpeechChip(selected = state.slowSpeech, onToggle = { onSlowSpeechChange(!state.slowSpeech) })
         }
 
         if (!state.hasApiKey) {
@@ -487,88 +500,74 @@ private fun InputPanel(
     onMicTap: () -> Unit,
     onCancelListening: () -> Unit,
     onCameraTap: () -> Unit,
-    onSlowSpeechChange: (Boolean) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onSlowSpeechChange: (Boolean) -> Unit,
 ) {
     val listening = state.speech as? SpeechState.Listening
     val isLoading = state.result is ResultState.Loading || state.result is ResultState.ReadingPhoto
+    // 文字入力は ⌨ で開く。入力済みの文字があるときは開いたままにする
+    var showKeyboard by rememberSaveable { mutableStateOf(false) }
+    val keyboardVisible = listening == null && (showKeyboard || state.input.isNotEmpty())
 
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        ) {
-            OutlinedTextField(
-                value = if (listening != null) listening.partial else state.input,
-                onValueChange = onInputChange,
-                enabled = listening == null,
-                placeholder = { Text(if (listening != null) "聞き取り中…" else "日本語で入力") },
-                maxLines = 3,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { onSubmit() }),
-                trailingIcon = {
-                    Row {
-                        if (state.input.isNotEmpty() && listening == null) {
-                            IconButton(onClick = onClear) {
-                                Icon(Icons.Filled.Close, contentDescription = "入力を消す")
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+            if (listening != null) {
+                Text(
+                    text = listening.partial.ifEmpty { "日本語で話してください…" },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = 6.dp).align(Alignment.CenterHorizontally),
+                )
+            }
+            if (keyboardVisible) {
+                OutlinedTextField(
+                    value = state.input,
+                    onValueChange = onInputChange,
+                    placeholder = { Text("日本語で入力") },
+                    maxLines = 3,
+                    shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+                    trailingIcon = {
+                        Row {
+                            if (state.input.isNotEmpty()) {
+                                IconButton(onClick = onClear) {
+                                    Icon(Icons.Filled.Close, contentDescription = "入力を消す")
+                                }
+                            }
+                            IconButton(
+                                onClick = onSubmit,
+                                enabled = state.input.isNotBlank() && !isLoading,
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "英語に変換")
                             }
                         }
-                        IconButton(
-                            onClick = onSubmit,
-                            enabled = state.input.isNotBlank() && listening == null && !isLoading,
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "英語に変換")
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
-                    selected = state.slowSpeech,
-                    onClick = { onSlowSpeechChange(!state.slowSpeech) },
-                    label = { Text("ゆっくり再生") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Speed, contentDescription = null, modifier = Modifier.size(18.dp))
                     },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 )
-                Spacer(Modifier.width(12.dp))
-                Button(
-                    onClick = onMicTap,
-                    colors = if (listening != null) {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        )
-                    } else {
-                        ButtonDefaults.buttonColors()
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(
-                        if (listening != null) Icons.Filled.Stop else Icons.Filled.Mic,
-                        contentDescription = null,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (listening != null) "話し終えたらタップ" else "日本語で話す",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
-                if (listening != null) {
-                    IconButton(onClick = onCancelListening) {
-                        Icon(Icons.Filled.Close, contentDescription = "音声入力をやめる")
-                    }
-                } else {
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = onCameraTap,
-                        enabled = !isLoading,
-                        modifier = Modifier.size(56.dp),
-                    ) {
-                        Icon(Icons.Filled.PhotoCamera, contentDescription = "写真の日本語を英語にする")
-                    }
-                }
             }
+            VoiceDock(
+                isListening = listening != null,
+                micIcon = if (listening != null) Icons.Filled.Stop else Icons.Filled.Mic,
+                micContentDescription = if (listening != null) "話し終えた" else "日本語で話す",
+                onMicClick = onMicTap,
+                caption = if (listening != null) "話し終えたらマイクをもう一度押す" else "押して日本語で話す",
+                leading = DockAction(
+                    icon = Icons.Filled.PhotoCamera,
+                    contentDescription = "写真の日本語を英語にする",
+                    onClick = onCameraTap,
+                    enabled = !isLoading && listening == null,
+                ),
+                trailing = if (listening != null) {
+                    DockAction(icon = Icons.Filled.Close, contentDescription = "音声入力をやめる", onClick = onCancelListening)
+                } else {
+                    DockAction(
+                        icon = Icons.Filled.Keyboard,
+                        contentDescription = if (keyboardVisible) "文字入力を閉じる" else "文字で入力する",
+                        onClick = { showKeyboard = !keyboardVisible },
+                        selected = keyboardVisible,
+                    )
+                },
+            )
         }
     }
 }

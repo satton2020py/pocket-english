@@ -8,12 +8,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
@@ -42,7 +46,6 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LargeFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -57,6 +60,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -67,6 +71,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.DockAction
+import com.example.pocketenglish.ui.common.VoiceDock
 import com.example.pocketenglish.ui.theme.english
 
 @Composable
@@ -158,45 +164,58 @@ private fun SituationPicker(
                 text = "APIキーが未設定のため、AIの返答は届きません。local.properties に GEMINI_API_KEY を設定してビルドしてください",
             )
         }
-        ChatSituation.entries.forEach { situation ->
-            Surface(
-                onClick = { onSelect(situation) },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
+        // 場面は色付きの大きなカードを2列で並べ、ひと目で選べるようにする
+        ChatSituation.entries.chunked(2).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(52.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                situation.icon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(situation.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            situation.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                row.forEach { situation ->
+                    SituationCard(
+                        situation = situation,
+                        onClick = { onSelect(situation) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
 }
+
+@Composable
+private fun SituationCard(situation: ChatSituation, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = situation.color,
+        contentColor = Color.White,
+        modifier = modifier.heightIn(min = 148.dp),
+    ) {
+        Column(
+            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(16.dp),
+        ) {
+            Icon(situation.icon, contentDescription = null, modifier = Modifier.size(40.dp))
+            Spacer(Modifier.height(16.dp))
+            Text(situation.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                situation.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.92f),
+            )
+        }
+    }
+}
+
+/** 場面ごとのカード色（白い文字が読める濃さ）。 */
+private val ChatSituation.color: Color
+    get() = when (this) {
+        ChatSituation.CAFE -> Color(0xFF7A4E33)
+        ChatSituation.IMMIGRATION -> Color(0xFF13294B)
+        ChatSituation.DIRECTIONS -> Color(0xFF0E7A5F)
+        ChatSituation.FREE_TALK -> Color(0xFFCC4510)
+    }
 
 // ---------------------------------------------------------------------------
 // 会話画面
@@ -427,6 +446,8 @@ private fun InputArea(
     onSendText: (String) -> Unit,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    // 声を出せない場所（電車内など）向けの文字入力は ⌨ で開く
+    var showKeyboard by rememberSaveable { mutableStateOf(false) }
     val canSend = !state.isWaitingReply && !state.isListening
     val submit = {
         if (draft.isNotBlank() && canSend) {
@@ -437,59 +458,63 @@ private fun InputArea(
 
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
         ) {
-            Text(
-                text = when {
-                    state.isListening && state.partialText.isNotBlank() -> state.partialText
-                    state.isListening -> "聞いています… 英語で話してください（もう一度押すと送信）"
-                    state.isWaitingReply -> "返答を待っています"
-                    else -> "マイクを押して英語で話しかけてみましょう"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (state.isListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-            )
-            Spacer(Modifier.height(8.dp))
-            LargeFloatingActionButton(
-                onClick = { if (!state.isWaitingReply) onMicClick() },
-                containerColor = if (state.isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                contentColor = if (state.isListening) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
-                modifier = Modifier.semantics {
-                    contentDescription = if (state.isListening) "聞き取りを終えて送信" else "音声で話す"
-                },
-            ) {
-                Icon(
-                    if (state.isListening) Icons.Filled.Stop else Icons.Filled.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
+            if (state.isListening && state.partialText.isNotBlank()) {
+                Text(
+                    text = state.partialText,
+                    style = MaterialTheme.typography.titleMedium.english(),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = 6.dp).align(Alignment.CenterHorizontally),
                 )
             }
-            Spacer(Modifier.height(10.dp))
-            // 声を出せない場所（電車内など）向けの文字入力
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    placeholder = { Text("文字で入力することもできます") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { submit() }),
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledIconButton(
-                    onClick = { submit() },
-                    enabled = draft.isNotBlank() && canSend,
-                    colors = IconButtonDefaults.filledIconButtonColors(),
+            if (showKeyboard) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "送信")
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        placeholder = { Text("英語で入力") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { submit() }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledIconButton(
+                        onClick = { submit() },
+                        enabled = draft.isNotBlank() && canSend,
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                        modifier = Modifier.size(52.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "送信")
+                    }
                 }
             }
+            VoiceDock(
+                isListening = state.isListening,
+                micIcon = if (state.isListening) Icons.Filled.Stop else Icons.Filled.Mic,
+                micContentDescription = if (state.isListening) "聞き取りを終えて送信" else "音声で話す",
+                onMicClick = onMicClick,
+                micEnabled = !state.isWaitingReply,
+                caption = when {
+                    state.isListening -> "聞いています… 話し終えたらもう一度押すと送信"
+                    state.isWaitingReply -> "相手の返事を待っています"
+                    else -> "押して英語で話す"
+                },
+                leading = DockAction(
+                    icon = Icons.Filled.Keyboard,
+                    contentDescription = if (showKeyboard) "文字入力を閉じる" else "文字で入力する",
+                    onClick = { showKeyboard = !showKeyboard },
+                    selected = showKeyboard,
+                ),
+            )
         }
     }
 }
