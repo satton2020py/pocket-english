@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +67,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.theme.english
 
 @Composable
 fun ChatScreen(
@@ -302,7 +304,8 @@ private fun AiBubble(message: ChatMessage, isSpeaking: Boolean, onSpeak: () -> U
         Surface(
             onClick = onSpeak,
             shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .widthIn(max = 320.dp)
                 .semantics { contentDescription = "${message.text}（タップで読み上げ）" },
@@ -313,7 +316,7 @@ private fun AiBubble(message: ChatMessage, isSpeaking: Boolean, onSpeak: () -> U
             ) {
                 Text(
                     message.text,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.english(),
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer(Modifier.width(8.dp))
@@ -329,7 +332,7 @@ private fun AiBubble(message: ChatMessage, isSpeaking: Boolean, onSpeak: () -> U
             Spacer(Modifier.height(6.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
                 modifier = Modifier.widthIn(max = 320.dp),
             ) {
                 Row(
@@ -339,14 +342,14 @@ private fun AiBubble(message: ChatMessage, isSpeaking: Boolean, onSpeak: () -> U
                     Icon(
                         Icons.Filled.Lightbulb,
                         contentDescription = "ワンポイント",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
                         tip,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                 }
             }
@@ -359,13 +362,13 @@ private fun UserBubble(message: ChatMessage) {
     Box(contentAlignment = Alignment.CenterEnd, modifier = Modifier.fillMaxWidth()) {
         Surface(
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.secondary,
             modifier = Modifier.widthIn(max = 300.dp),
         ) {
             Text(
                 message.text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.bodyLarge.english(),
+                color = MaterialTheme.colorScheme.onSecondary,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             )
         }

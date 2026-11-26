@@ -3,10 +3,14 @@ package com.example.pocketenglish.ui
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Hearing
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -32,11 +36,12 @@ import com.example.pocketenglish.ui.listening.ListeningScreen
 import com.example.pocketenglish.ui.phrase.PhraseScreen
 import kotlinx.coroutines.launch
 
-enum class AppTab(val label: String, val icon: ImageVector) {
-    PHRASE("フレーズ", Icons.Filled.Bookmarks),
-    AI_CHAT("AI会話", Icons.Filled.SmartToy),
-    INTERPRETER("瞬間通訳", Icons.Filled.Translate),
-    LISTENING("聞き取り", Icons.Filled.Hearing),
+/** 選択中のタブは塗りつぶし、それ以外は線だけのアイコンにする（Android・iPhone共通の見せ方）。 */
+enum class AppTab(val label: String, val selectedIcon: ImageVector, val icon: ImageVector) {
+    PHRASE("フレーズ", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
+    AI_CHAT("AI会話", Icons.Filled.Forum, Icons.Outlined.Forum),
+    INTERPRETER("瞬間通訳", Icons.Filled.Translate, Icons.Outlined.Translate),
+    LISTENING("聞き取り", Icons.Filled.Hearing, Icons.Outlined.Hearing),
 }
 
 @Composable
@@ -56,16 +61,17 @@ fun MainScreen() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                 AppTab.entries.forEach { tab ->
+                    val selected = currentTab == tab
                     NavigationBarItem(
-                        selected = currentTab == tab,
+                        selected = selected,
                         onClick = { currentTab = tab },
-                        icon = { Icon(tab.icon, contentDescription = null) },
+                        icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
                         label = { Text(tab.label) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                            indicatorColor = MaterialTheme.colorScheme.primary,
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
                         ),
                     )

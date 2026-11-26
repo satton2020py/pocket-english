@@ -68,6 +68,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.tts.TtsStatus
 import com.example.pocketenglish.ui.common.CAMERA_PRIVACY_NOTE
 import com.example.pocketenglish.ui.common.rememberCameraCapture
+import com.example.pocketenglish.ui.theme.english
 
 private const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
@@ -317,7 +318,7 @@ private fun ListeningCard(partial: String) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = partial.ifEmpty { "（英語を待っています）" },
-                style = MaterialTheme.typography.titleLarge,
+                style = if (partial.isEmpty()) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleLarge.english(),
             )
         }
     }
@@ -357,7 +358,7 @@ private fun EntryCard(
                     text = entry.english.ifEmpty {
                         if (entry.translation is TranslationState.Translating) "写真の文字を読み取り中…" else "（読み取れませんでした）"
                     },
-                    style = if (entry.english.isEmpty()) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge,
+                    style = if (entry.english.isEmpty()) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge.english(),
                     modifier = Modifier.weight(1f).padding(vertical = if (entry.english.isEmpty()) 12.dp else 0.dp),
                 )
                 if (entry.english.isNotEmpty()) {

@@ -70,6 +70,7 @@ import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.tts.TtsStatus
 import com.example.pocketenglish.ui.common.CAMERA_PRIVACY_NOTE
 import com.example.pocketenglish.ui.common.rememberCameraCapture
+import com.example.pocketenglish.ui.theme.english
 
 private const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
@@ -462,8 +463,8 @@ private fun SpeakableCard(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = english,
-                    style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
-                    fontWeight = if (emphasized) FontWeight.Bold else null,
+                    style = (if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge).english(),
+                    fontWeight = if (emphasized) FontWeight.Black else null,
                 )
             }
             Spacer(Modifier.width(8.dp))

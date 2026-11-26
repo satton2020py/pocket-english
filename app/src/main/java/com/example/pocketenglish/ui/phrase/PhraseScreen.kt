@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -56,7 +57,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.model.PhraseCategory
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.color
 import com.example.pocketenglish.ui.common.icon
+import com.example.pocketenglish.ui.theme.english
 import com.example.pocketenglish.ui.theme.favoriteStarColor
 
 @Composable
@@ -226,7 +229,7 @@ private fun PhraseCard(
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.phrase.english, style = MaterialTheme.typography.titleLarge)
+                Text(text = item.phrase.english, style = MaterialTheme.typography.titleLarge.english())
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = item.phrase.japanese,
@@ -347,7 +350,7 @@ private fun BottomControls(
                             leadingIcon = {
                                 Icon(filter.category.icon, contentDescription = null, modifier = Modifier.size(18.dp))
                             },
-                            colors = categoryChipColors(),
+                            colors = categoryChipColors(filter.category.color),
                             modifier = Modifier.height(44.dp),
                         )
                     }
@@ -358,10 +361,12 @@ private fun BottomControls(
 }
 
 @Composable
-private fun categoryChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primary,
-    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+private fun categoryChipColors(categoryColor: Color? = null) = FilterChipDefaults.filterChipColors(
+    // カテゴリは色分けして、場面ごとに見つけやすくする（未選択でもアイコンはカテゴリ色）
+    iconColor = categoryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+    selectedContainerColor = categoryColor ?: MaterialTheme.colorScheme.primary,
+    selectedLabelColor = if (categoryColor != null) Color.White else MaterialTheme.colorScheme.onPrimary,
+    selectedLeadingIconColor = if (categoryColor != null) Color.White else MaterialTheme.colorScheme.onPrimary,
 )
 
 /** 英語音声データのインストール画面を開く。開けなければ端末のTTS設定へ。 */
