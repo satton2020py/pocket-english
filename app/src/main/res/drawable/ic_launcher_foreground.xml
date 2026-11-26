@@ -1,15 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 吹き出し（会話）＋紙飛行機（旅行）。丸く切り抜かれても欠けないよう、中央66dpの安全領域に収める -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 吹き出し -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M34,36h40a6,6 0,0 1,6 6v22a6,6 0,0 1,-6 6H52l-10,9v-9h-8a6,6 0,0 1,-6 -6V42a6,6 0,0 1,6 -6z" />
-    <!-- 3本線（会話テキスト） -->
-    <path
-        android:fillColor="#0B57D0"
-        android:pathData="M38,45h32v4H38zM38,53h26v4H38zM38,61h18v4H38z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="56"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+        <!-- 吹き出し -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M28,30h52a8,8 0,0 1,8 8v26a8,8 0,0 1,-8 8H50l-13,11V72h-9a8,8 0,0 1,-8 -8V38a8,8 0,0 1,8 -8z" />
+        <!-- 紙飛行機 -->
+        <path
+            android:fillColor="#13294B"
+            android:pathData="M36,52L74,38L62,66L55,56Z" />
+        <path
+            android:fillColor="#2F7BEA"
+            android:pathData="M55,56L74,38L52,60Z" />
+        <!-- 飛んできた軌跡 -->
+        <path
+            android:strokeColor="#13294B"
+            android:strokeWidth="2.6"
+            android:strokeLineCap="round"
+            android:pathData="M30,61.5L32.5,60.6M37.5,59.2L40,58.6M45,57.8L47,57.6" />
+    </group>
 </vector>

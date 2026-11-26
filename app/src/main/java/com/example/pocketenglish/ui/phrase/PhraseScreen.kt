@@ -7,6 +7,7 @@ import android.speech.tts.TextToSpeech
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,17 +25,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,10 +53,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,25 +70,32 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.model.Phrase
 import com.example.pocketenglish.model.PhraseCategory
 import com.example.pocketenglish.tts.TtsStatus
+import com.example.pocketenglish.ui.common.SlowSpeechChip
+import com.example.pocketenglish.ui.common.color
 import com.example.pocketenglish.ui.common.icon
+import com.example.pocketenglish.ui.theme.english
 import com.example.pocketenglish.ui.theme.favoriteStarColor
+
+internal const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
 @Composable
 fun PhraseScreen(
     showMessage: (String) -> Unit,
+    onShowPhrase: (phraseId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PhraseViewModel = viewModel(factory = PhraseViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
     PhraseContent(
         state = state,
         onSelectFilter = viewModel::selectFilter,
+        onQueryChange = viewModel::setQuery,
         onPhraseTap = { phrase ->
             val accepted = viewModel.onPhraseTapped(phrase)
-            if (!accepted) showMessage("音声を再生できません。英語の音声データを確認してください")
+            if (!accepted) showMessage(TTS_ERROR_MESSAGE)
         },
+        onShow = { phrase -> onShowPhrase(phrase.id) },
         onToggleFavorite = { item ->
             viewModel.toggleFavorite(item.phrase)
             showMessage(if (item.isFavorite) "お気に入りから外しました" else "★ お気に入りに追加しました")
@@ -91,31 +112,65 @@ fun PhraseScreen(
 private fun PhraseContent(
     state: PhraseUiState,
     onSelectFilter: (PhraseFilter) -> Unit,
+    onQueryChange: (String) -> Unit,
     onPhraseTap: (Phrase) -> Unit,
+    onShow: (Phrase) -> Unit,
     onToggleFavorite: (PhraseItem) -> Unit,
     onSlowSpeechChange: (Boolean) -> Unit,
     onOpenTtsSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val searching = state.query.isNotBlank()
+
     Column(modifier = modifier.fillMaxSize()) {
-        Header(state = state)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+        ) {
+            Text(text = "フレーズ", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            SlowSpeechChip(selected = state.slowSpeech, onToggle = { onSlowSpeechChange(!state.slowSpeech) })
+        }
+
+        SearchField(query = state.query, onQueryChange = onQueryChange)
+
+        if (!searching) {
+            CategoryTiles(state = state, onSelectFilter = onSelectFilter)
+        }
 
         val status = state.ttsStatus
         if (status is TtsStatus.Unavailable) {
             TtsWarning(status = status, onOpenSettings = onOpenTtsSettings)
         }
 
-        // カテゴリ切替でリスト先頭に戻す
+        Text(
+            text = when {
+                searching -> "「${state.query.trim()}」の検索結果 ${state.items.size}件"
+                else -> "タップで再生 ・ 長押しで相手に見せる"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp),
+        )
+
+        // カテゴリ切替・検索でリスト先頭に戻す
         val listState = rememberLazyListState()
-        LaunchedEffect(state.filter) { listState.scrollToItem(0) }
+        LaunchedEffect(state.filter, state.query) { listState.scrollToItem(0) }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (state.items.isEmpty() && state.filter == PhraseFilter.Favorites) {
-                EmptyFavorites()
-            } else {
-                LazyColumn(
+            when {
+                state.items.isEmpty() && searching -> EmptyMessage(
+                    icon = Icons.Filled.Search,
+                    title = "見つかりませんでした",
+                    body = "別のことばで探すか、瞬間通訳タブで英語にしてみてください",
+                )
+                state.items.isEmpty() && state.filter == PhraseFilter.Favorites -> EmptyMessage(
+                    icon = Icons.Outlined.StarBorder,
+                    title = "お気に入りはまだありません",
+                    body = "よく使うフレーズの ★ をタップすると\nここにまとまります",
+                )
+                else -> LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
@@ -123,37 +178,136 @@ private fun PhraseContent(
                         PhraseCard(
                             item = item,
                             onTap = { onPhraseTap(item.phrase) },
+                            onShow = { onShow(item.phrase) },
                             onToggleFavorite = { onToggleFavorite(item) },
                         )
                     }
                 }
             }
         }
-
-        // 親指が届く画面下部に操作系をまとめる
-        BottomControls(
-            state = state,
-            onSelectFilter = onSelectFilter,
-            onSlowSpeechChange = onSlowSpeechChange,
-        )
     }
 }
 
 @Composable
-private fun Header(state: PhraseUiState) {
-    val title = when (val f = state.filter) {
-        PhraseFilter.Favorites -> "お気に入り"
-        is PhraseFilter.Category -> f.category.labelJa
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = { Text("日本語か英語で探す") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = "検索をやめる")
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(16.dp),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    )
+}
+
+/** Googleマップのカテゴリのように、アイコン付きの色タイルを横に並べる。 */
+@Composable
+private fun CategoryTiles(state: PhraseUiState, onSelectFilter: (PhraseFilter) -> Unit) {
+    val filters: List<PhraseFilter> = remember {
+        PhraseCategory.entries.map { PhraseFilter.Category(it) } + PhraseFilter.Favorites
     }
-    Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp)) {
-        Text(text = title, style = MaterialTheme.typography.headlineSmall)
-        Text(
-            text = "タップで再生 ・ 長押し / ★ でお気に入り",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val rowState = rememberLazyListState()
+    LaunchedEffect(state.filter) {
+        val index = filters.indexOf(state.filter)
+        if (index >= 0) rowState.animateScrollToItem(index)
+    }
+    LazyRow(
+        state = rowState,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(items = filters, key = { it.toString() }) { filter ->
+            when (filter) {
+                PhraseFilter.Favorites -> CategoryTile(
+                    label = "お気に入り ${state.favoriteCount}",
+                    icon = Icons.Filled.Star,
+                    // 白い文字が読める濃さの琥珀色
+                    color = Color(0xFFA86200),
+                    selected = filter == state.filter,
+                    onClick = { onSelectFilter(filter) },
+                )
+                is PhraseFilter.Category -> CategoryTile(
+                    label = filter.category.shortLabel,
+                    icon = filter.category.icon,
+                    color = filter.category.color,
+                    selected = filter == state.filter,
+                    onClick = { onSelectFilter(filter) },
+                )
+            }
+        }
     }
 }
+
+@Composable
+private fun CategoryTile(
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val container by animateColorAsState(
+        targetValue = if (selected) color else color.copy(alpha = 0.14f),
+        label = "tileColor",
+    )
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = container,
+        contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .width(84.dp)
+            .semantics { this.selected = selected },
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (selected) Color.White else color,
+                modifier = Modifier.size(30.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** タイル用の短いカテゴリ名。 */
+private val PhraseCategory.shortLabel: String
+    get() = when (this) {
+        PhraseCategory.AIRPORT -> "空港・移動"
+        PhraseCategory.HOTEL -> "ホテル"
+        PhraseCategory.RESTAURANT -> "食事"
+        PhraseCategory.SHOPPING -> "買い物"
+        PhraseCategory.EMERGENCY -> "緊急"
+        PhraseCategory.GREETING -> "挨拶"
+    }
 
 @Composable
 private fun TtsWarning(status: TtsStatus.Unavailable, onOpenSettings: () -> Unit) {
@@ -185,6 +339,7 @@ private fun TtsWarning(status: TtsStatus.Unavailable, onOpenSettings: () -> Unit
 private fun PhraseCard(
     item: PhraseItem,
     onTap: () -> Unit,
+    onShow: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -193,74 +348,97 @@ private fun PhraseCard(
         targetValue = if (item.isSpeaking) colors.primaryContainer else colors.surfaceContainer,
         label = "cardColor",
     )
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
 
     Surface(
         color = container,
         contentColor = if (item.isSpeaking) colors.onPrimaryContainer else colors.onSurface,
         shape = shape,
-        border = if (item.isSpeaking) BorderStroke(2.dp, colors.primary) else null,
+        border = BorderStroke(
+            if (item.isSpeaking) 2.dp else 1.dp,
+            if (item.isSpeaking) colors.primary else colors.outlineVariant,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .combinedClickable(
                 role = Role.Button,
                 onClickLabel = if (item.isSpeaking) "再生を止める" else "英語を再生",
-                onLongClickLabel = if (item.isFavorite) "お気に入りから外す" else "お気に入りに追加",
+                onLongClickLabel = "全画面で相手に見せる",
                 onClick = onTap,
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleFavorite()
+                    onShow()
                 },
             ),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 4.dp),
+            modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 8.dp),
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                contentDescription = null,
-                tint = if (item.isSpeaking) colors.primary else colors.outline,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.phrase.english, style = MaterialTheme.typography.titleLarge)
+                // 話す英文を一番大きく、日本語は一段小さく灰色で添える
+                Text(text = item.phrase.english, style = MaterialTheme.typography.titleLarge.english())
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = item.phrase.japanese,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = if (item.isSpeaking) colors.onPrimaryContainer else colors.onSurfaceVariant,
                 )
                 item.phrase.note?.let { note ->
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "💡 $note",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (item.isSpeaking) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                    )
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = colors.tertiaryContainer,
+                        contentColor = colors.onTertiaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(
+                            text = note,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
                 }
             }
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleFavorite()
-                },
-            ) {
-                Icon(
-                    imageVector = if (item.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                    contentDescription = if (item.isFavorite) "お気に入りから外す" else "お気に入りに追加",
-                    tint = if (item.isFavorite) favoriteStarColor else colors.outline,
-                    modifier = Modifier.size(28.dp),
-                )
+            Spacer(Modifier.width(8.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                FilledIconButton(
+                    onClick = onTap,
+                    colors = if (item.isSpeaking) {
+                        IconButtonDefaults.filledIconButtonColors()
+                    } else {
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = colors.primaryContainer,
+                            contentColor = colors.onPrimaryContainer,
+                        )
+                    },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        imageVector = if (item.isSpeaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = if (item.isSpeaking) "再生を止める" else "英語を再生",
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onToggleFavorite()
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (item.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        contentDescription = if (item.isFavorite) "お気に入りから外す" else "お気に入りに追加",
+                        tint = if (item.isFavorite) favoriteStarColor else colors.outline,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun EmptyFavorites() {
+private fun EmptyMessage(icon: ImageVector, title: String, body: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -268,101 +446,31 @@ private fun EmptyFavorites() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.StarBorder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.size(56.dp),
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(36.dp),
+            )
+        }
         Spacer(Modifier.height(12.dp))
-        Text("お気に入りはまだありません", style = MaterialTheme.typography.titleMedium)
+        Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "よく使うフレーズを長押し、または★をタップすると\nここにまとまります",
+            text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }
 }
-
-@Composable
-private fun BottomControls(
-    state: PhraseUiState,
-    onSelectFilter: (PhraseFilter) -> Unit,
-    onSlowSpeechChange: (Boolean) -> Unit,
-) {
-    val filters: List<PhraseFilter> = remember {
-        listOf<PhraseFilter>(PhraseFilter.Favorites) +
-            PhraseCategory.entries.map { PhraseFilter.Category(it) }
-    }
-    val rowState = rememberLazyListState()
-    LaunchedEffect(state.filter) {
-        val index = filters.indexOf(state.filter)
-        if (index >= 0) rowState.animateScrollToItem(index)
-    }
-
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
-        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            ) {
-                FilterChip(
-                    selected = state.slowSpeech,
-                    onClick = { onSlowSpeechChange(!state.slowSpeech) },
-                    label = { Text("ゆっくり再生") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Speed, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                )
-            }
-            LazyRow(
-                state = rowState,
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items = filters, key = { it.toString() }) { filter ->
-                    val selected = filter == state.filter
-                    when (filter) {
-                        PhraseFilter.Favorites -> FilterChip(
-                            selected = selected,
-                            onClick = { onSelectFilter(filter) },
-                            label = { Text("お気に入り ${state.favoriteCount}") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Filled.Star,
-                                    contentDescription = null,
-                                    tint = favoriteStarColor,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            },
-                            colors = categoryChipColors(),
-                            modifier = Modifier.height(44.dp),
-                        )
-                        is PhraseFilter.Category -> FilterChip(
-                            selected = selected,
-                            onClick = { onSelectFilter(filter) },
-                            label = { Text(filter.category.labelJa) },
-                            leadingIcon = {
-                                Icon(filter.category.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            colors = categoryChipColors(),
-                            modifier = Modifier.height(44.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun categoryChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primary,
-    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-)
 
 /** 英語音声データのインストール画面を開く。開けなければ端末のTTS設定へ。 */
 private fun openTtsSettings(context: Context): Boolean {

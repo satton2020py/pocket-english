@@ -91,3 +91,6 @@ AI会話／瞬間通訳は **Gemini API**（無料枠あり・クレジットカ
 
 ## セキュリティ注意
 BuildConfig に入れたAPIキーはAPKを解析すると取り出せます。個人利用は問題ありませんが、ストア配布する場合は自前のプロキシサーバー経由に切り替えてください。
+
+## フォントのライセンス
+英文の表示に使っている Nunito（`app/src/main/res/font/nunito_*.ttf`）は The Nunito Project Authors による SIL Open Font License 1.1 のフォントです（https://openfontlicense.org）。

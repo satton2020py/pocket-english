@@ -39,6 +39,8 @@ data class PhraseUiState(
     val favoriteCount: Int = 0,
     val slowSpeech: Boolean = false,
     val ttsStatus: TtsStatus = TtsStatus.Initializing,
+    /** 検索語。空でなければカテゴリに関係なく全フレーズから探す。 */
+    val query: String = "",
 )
 
 class PhraseViewModel(
@@ -50,17 +52,24 @@ class PhraseViewModel(
     // 選択中フィルタは画面回転・プロセス再生成でも保持する
     private val filterKey = savedStateHandle.getStateFlow(KEY_FILTER, PhraseCategory.AIRPORT.name)
 
+    private val query = savedStateHandle.getStateFlow(KEY_QUERY, "")
+
     val uiState: StateFlow<PhraseUiState> = combine(
-        filterKey,
+        combine(filterKey, query) { key, q -> key to q },
         prefs.favoriteIds,
         prefs.slowSpeech,
         tts.speakingId,
         tts.status,
-    ) { key, favorites, slow, speakingId, ttsStatus ->
+    ) { (key, q), favorites, slow, speakingId, ttsStatus ->
         val filter = decodeFilter(key)
-        val source = when (filter) {
-            PhraseFilter.Favorites -> PhraseData.all.filter { it.id in favorites }
-            is PhraseFilter.Category -> PhraseData.byCategory(filter.category)
+        val trimmed = q.trim()
+        val source = when {
+            trimmed.isNotEmpty() -> PhraseData.all.filter {
+                it.english.contains(trimmed, ignoreCase = true) || it.japanese.contains(trimmed)
+            }
+            filter == PhraseFilter.Favorites -> PhraseData.all.filter { it.id in favorites }
+            filter is PhraseFilter.Category -> PhraseData.byCategory(filter.category)
+            else -> emptyList()
         }
         PhraseUiState(
             filter = filter,
@@ -75,6 +84,7 @@ class PhraseViewModel(
             favoriteCount = PhraseData.all.count { it.id in favorites },
             slowSpeech = slow,
             ttsStatus = ttsStatus,
+            query = q,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -84,7 +94,15 @@ class PhraseViewModel(
 
     fun selectFilter(filter: PhraseFilter) {
         savedStateHandle[KEY_FILTER] = encodeFilter(filter)
+        savedStateHandle[KEY_QUERY] = ""
     }
+
+    fun setQuery(text: String) {
+        savedStateHandle[KEY_QUERY] = text
+    }
+
+    /** 「見せる」画面の再生ボタン用。速さをその場で選べる。 */
+    fun speak(phrase: Phrase, slow: Boolean): Boolean = tts.toggle(phrase.english, phrase.id, slow = slow)
 
     /** @return 再生（または停止）を受け付けたら true。TTSが使えない場合は false。 */
     fun onPhraseTapped(phrase: Phrase): Boolean =
@@ -104,6 +122,7 @@ class PhraseViewModel(
 
     companion object {
         private const val KEY_FILTER = "phrase_filter"
+        private const val KEY_QUERY = "phrase_query"
         private const val FAVORITES = "FAVORITES"
 
         private fun encodeFilter(filter: PhraseFilter): String = when (filter) {

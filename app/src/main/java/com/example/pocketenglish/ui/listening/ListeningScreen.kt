@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
@@ -51,6 +52,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,7 +71,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketenglish.tts.TtsStatus
 import com.example.pocketenglish.ui.common.CAMERA_PRIVACY_NOTE
+import com.example.pocketenglish.ui.common.DockAction
+import com.example.pocketenglish.ui.common.SlowSpeechChip
+import com.example.pocketenglish.ui.common.VoiceDock
 import com.example.pocketenglish.ui.common.rememberCameraCapture
+import com.example.pocketenglish.ui.theme.english
 
 private const val TTS_ERROR_MESSAGE = "音声を再生できません。英語の音声データを確認してください"
 
@@ -173,11 +181,12 @@ private fun ListeningContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = "英語の聞き取り", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    text = "相手の英語を聞き取って日本語に。英文タップでもう一度再生",
+                    text = "相手の英語を日本語に。英文タップで再生",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            SlowSpeechChip(selected = state.slowSpeech, onToggle = { onSlowSpeechChange(!state.slowSpeech) })
             if (state.entries.isNotEmpty()) {
                 IconButton(onClick = onClearHistory) {
                     Icon(Icons.Filled.DeleteSweep, contentDescription = "履歴を消す")
@@ -317,7 +326,7 @@ private fun ListeningCard(partial: String) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = partial.ifEmpty { "（英語を待っています）" },
-                style = MaterialTheme.typography.titleLarge,
+                style = if (partial.isEmpty()) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleLarge.english(),
             )
         }
     }
@@ -357,7 +366,7 @@ private fun EntryCard(
                     text = entry.english.ifEmpty {
                         if (entry.translation is TranslationState.Translating) "写真の文字を読み取り中…" else "（読み取れませんでした）"
                     },
-                    style = if (entry.english.isEmpty()) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge,
+                    style = if (entry.english.isEmpty()) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge.english(),
                     modifier = Modifier.weight(1f).padding(vertical = if (entry.english.isEmpty()) 12.dp else 0.dp),
                 )
                 if (entry.english.isNotEmpty()) {
@@ -475,73 +484,58 @@ private fun InputPanel(
     onMicTap: () -> Unit,
     onCancelListening: () -> Unit,
     onCameraTap: () -> Unit,
-    onSlowSpeechChange: (Boolean) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onSlowSpeechChange: (Boolean) -> Unit,
 ) {
     val listening = state.hearing is HearingState.Listening
+    // 看板・メニューの英語を打ち込む入力欄は ⌨ で開く
+    var showKeyboard by rememberSaveable { mutableStateOf(false) }
+    val keyboardVisible = !listening && (showKeyboard || state.input.isNotEmpty())
 
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        ) {
-            OutlinedTextField(
-                value = state.input,
-                onValueChange = onInputChange,
-                enabled = !listening,
-                placeholder = { Text("英語を文字で入力（看板・メニューなど）") },
-                maxLines = 3,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Send,
-                ),
-                keyboardActions = KeyboardActions(onSend = { onSubmit() }),
-                trailingIcon = {
-                    IconButton(onClick = onSubmit, enabled = state.input.isNotBlank() && !listening) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "日本語に翻訳")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
-                    selected = state.slowSpeech,
-                    onClick = { onSlowSpeechChange(!state.slowSpeech) },
-                    label = { Text("ゆっくり再生") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Speed, contentDescription = null, modifier = Modifier.size(18.dp))
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+            if (keyboardVisible) {
+                OutlinedTextField(
+                    value = state.input,
+                    onValueChange = onInputChange,
+                    placeholder = { Text("英語を入力（看板・メニューなど）") },
+                    maxLines = 3,
+                    shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Send,
+                    ),
+                    keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+                    trailingIcon = {
+                        IconButton(onClick = onSubmit, enabled = state.input.isNotBlank()) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "日本語に翻訳")
+                        }
                     },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 )
-                Spacer(Modifier.width(12.dp))
-                Button(
-                    onClick = onMicTap,
-                    colors = if (listening) {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        )
-                    } else {
-                        ButtonDefaults.buttonColors()
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(if (listening) Icons.Filled.Stop else Icons.Filled.Hearing, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (listening) "聞き終えたらタップ" else "英語を聞き取る",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
-                if (listening) {
-                    IconButton(onClick = onCancelListening) {
-                        Icon(Icons.Filled.Close, contentDescription = "聞き取りをやめる")
-                    }
-                } else {
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(onClick = onCameraTap, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Filled.PhotoCamera, contentDescription = "写真の英語を日本語にする")
-                    }
-                }
             }
+            VoiceDock(
+                isListening = listening,
+                micIcon = if (listening) Icons.Filled.Stop else Icons.Filled.Hearing,
+                micContentDescription = if (listening) "聞き終えた" else "英語を聞き取る",
+                onMicClick = onMicTap,
+                caption = if (listening) "相手にスマホを向けてください。終わったらもう一度押す" else "押して相手の英語を聞き取る",
+                leading = DockAction(
+                    icon = Icons.Filled.PhotoCamera,
+                    contentDescription = "写真の英語を日本語にする",
+                    onClick = onCameraTap,
+                    enabled = !listening,
+                ),
+                trailing = if (listening) {
+                    DockAction(icon = Icons.Filled.Close, contentDescription = "聞き取りをやめる", onClick = onCancelListening)
+                } else {
+                    DockAction(
+                        icon = Icons.Filled.Keyboard,
+                        contentDescription = if (keyboardVisible) "文字入力を閉じる" else "英語を文字で入力する",
+                        onClick = { showKeyboard = !keyboardVisible },
+                        selected = keyboardVisible,
+                    )
+                },
+            )
         }
     }
 }
