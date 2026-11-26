@@ -222,7 +222,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
 @Composable
 private fun CategoryTiles(state: PhraseUiState, onSelectFilter: (PhraseFilter) -> Unit) {
     val filters: List<PhraseFilter> = remember {
-        PhraseCategory.entries.map { PhraseFilter.Category(it) } + PhraseFilter.Favorites
+        listOf<PhraseFilter>(PhraseFilter.Favorites) + PhraseCategory.entries.map { PhraseFilter.Category(it) }
     }
     val rowState = rememberLazyListState()
     LaunchedEffect(state.filter) {
